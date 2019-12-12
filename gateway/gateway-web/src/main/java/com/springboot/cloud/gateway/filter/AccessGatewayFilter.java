@@ -2,10 +2,12 @@ package com.springboot.cloud.gateway.filter;
 
 import com.springboot.cloud.auth.client.service.IAuthService;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cloud.gateway.filter.GatewayFilterChain;
 import org.springframework.cloud.gateway.filter.GlobalFilter;
 import org.springframework.context.annotation.ComponentScan;
+import org.springframework.context.annotation.Configuration;
 import org.springframework.core.io.buffer.DataBuffer;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -17,13 +19,14 @@ import reactor.core.publisher.Mono;
 /**
  * 请求url权限校验
  */
-//@Configuration
+@Configuration
 @ComponentScan(basePackages = "com.springboot.cloud.auth.client")
 @Slf4j
 public class AccessGatewayFilter implements GlobalFilter {
 
     private final static String X_CLIENT_TOKEN_USER = "x-client-token-user";
     private final static String X_CLIENT_TOKEN = "x-client-token";
+    private static final String BEARER = "Bearer";
     /**
      * 由authentication-client模块提供签权的feign客户端
      */
@@ -48,6 +51,11 @@ public class AccessGatewayFilter implements GlobalFilter {
         //不需要网关签权的url
         if (authService.ignoreAuthentication(url)) {
             return chain.filter(exchange);
+        }
+        // 如果请求未携带token信息, 直接跳出
+        if (StringUtils.isBlank(authentication) || !authentication.startsWith(BEARER)) {
+            log.debug("url:{},method:{},headers:{}, 请求未携带token信息", url, method, request.getHeaders());
+            return unauthorized(exchange);
         }
         //调用签权服务看用户是否有权限，若有权限进入下一个filter
         if (authService.hasPermission(authentication, url, method)) {
